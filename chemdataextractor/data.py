@@ -113,7 +113,9 @@ PACKAGES = [
 def get_data_dir():
     """Return path to the data directory."""
     # Use data_dir config value if set, otherwise use OS-dependent data directory given by appdirs
-    return config.get('data_dir', appdirs.user_data_dir('ChemDataExtractor'))
+    # return config.get('data_dir', appdirs.user_data_dir('ChemDataExtractor'))
+    thisdir = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(thisdir, "downloaded_data/")
 
 
 def find_data(path, warn=True):
