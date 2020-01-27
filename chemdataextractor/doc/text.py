@@ -28,7 +28,12 @@ from ..parse.tg import TgParser
 from ..parse.nmr import NmrParser
 from ..parse.uvvis import UvvisParser
 from ..nlp.lexicon import ChemLexicon
-from ..nlp.cem import CemTagger, IGNORE_PREFIX, IGNORE_SUFFIX, SPECIALS, SPLITS
+# from ..nlp.cem import \
+#     IGNORE_PREFIX, \
+#     IGNORE_SUFFIX, \
+#     SPECIALS, \
+#     SPLITS
+    # CemTagger, \
 from ..nlp.abbrev import ChemAbbreviationDetector
 from ..nlp.tag import NoneTagger
 from ..nlp.pos import ChemCrfPosTagger
@@ -39,6 +44,107 @@ from .element import BaseElement
 
 
 log = logging.getLogger(__name__)
+
+#: Token beginnings to ignore when considering stopwords and deriving spans
+IGNORE_PREFIX = [
+    'fluorophore-', 'low-', 'high-', 'single-', 'odd-', 'non-', 'high-', 'cross-', 'cellulose-', 'anti-', '-multiwall',
+    'globular-', 'plasma-', 'hybrid-', 'protein-', 'explicit-', 'cation-', 'water-', 'through-', 'starch-', 'rigid-',
+    'conjugated-', 'photoactivatable-', 'alginate-', 'nano-', 'dye-', 'ligand-', 'enzyme-', 'platelet-', 'photo-',
+    'total-', 'drug-', 'nanoparticle-', 'nanomaterial-', 'inter-', 'ion-', 'post-', 'one-'
+]
+
+IGNORE_SUFFIX = [
+    # Many of these are now unnecessary due to tokenization improvements, but not much harm in leaving them here.
+    '-', '\'s', '-activated', '-adequate', '-affected', '-anesthetized', '-based', '-binding', '-boosted', '-cane',
+    '-conditioned', '-containing', '-covered', '-deficient', '-dependent', '-derived', '-electrolyte', '-enriched',
+    '-exposed', '-flanking', '-free', '-fused', '-gated', '-glucuronosyltransferases', '-increasing', '-induced',
+    '-inducible', '-l-tyrosine', '-labeled', '-lesioned', '-loaded', '-mediated', '-patterned', '-primed', '-reducing',
+    '-regulated', '-releasing', '-resistant', '-response', '-rich', '-s-transferase', '-sensitive', '-soluble',
+    '-stimulated', '-stressed', '-supplemented', '-terminal', '-transferase', '-treated', '-type', '-blood',
+    '-specific', '-like', '-elicited', '-stripped', '-transfer', '-conjugate', '-coated', '-producing', '-oxidized',
+    '-associated', '-related', '-converting', '-ligand', '-on-glass', '-seeking', '-hydrolyzing', '-o-deethylase',
+    '-deethylase', '-o-depentylase', '-depentylase', '-n-demethylase', '-demethylase', '-o-methyltransferase',
+    '-c-oxidase', '-oxidase', '-n-biosidase', '-biosidase', '-immunoproteins', '-spiked', '-lowering', '-page',
+    '-depletion', '-formation', '-dealkylation', '-deethylation', '-alkylation', '-ribosylation', '-production',
+    '-demethylation', '-oxidation', '-transition', '-glycosylation', '-zwitterion', '-benzylation', '-reduction',
+    '-oxygenation', '-nitrosylation', '-evoked', '-mutated', '-doped', '-aged', '-increased', '-triggered', '-linked',
+    '-fixed', '-injected', '-contaminated', '-depleted', '-enhanced', '-stained', '-modified', '-fed', '-demethylated',
+    '-catalyzed', '-etched', '-labelled', '-conjugated', '-pretreated', '-ribosylated', '-phosphorylated', '-reduced',
+    '-bonded', '-stabilised', '-crosslinked', '-mannosylated', '-capped', '-supported', '-initiated', '-integrated',
+    '-accelerated', '-encapsulated', '-untreated', '-expanded', '-coupled', '-terminated', '-assisted',
+    '-permeabilized', '-resulted', '-alkylated', '-functionalized', '-contained', '-buffered', '-caused', '-cyclized',
+    '-substituted', '-modulated', '-inhibited', '-centered', '-promoted', '-confirmed', '-provoked', '-dominated',
+    '-limited', '-challenged', '-tetrabrominated', '-unesterified', '-refreshed', '-bottled', '-protonated',
+    '-incubated', '-tagged', '-damaged', '-bridged', '-maintained', '-impregnated', '-metabolizing', '-deprived',
+    '-insensitive', '-dendrimer', '-receptor', '-tolerant', '-influx', '-administrated', '-requiring', '-permeable',
+    '-transport', '-intoxicated', '-overload', '-derivatives', '-derivative', '-sweetened', '-transporter', '-bound',
+    '-extract', '-bonding', '-bond', '-trna', '-redistribution', '-copolymers', '-copolymer', '-appended',
+    '-susceptible', '-transfected', '-bearing', '-regenerating', '-induction', '-conducting', '-decorated',
+    '-encapsulating', '-consuming', '-bridge', '-dependence', '-Pdots', '-only', '-carrying', '-treating', '-isomerase',
+    '-ion', '-ions', '-coordinated', '-saturated', '-sparing', '-enclosed', '-stabilized', '-polymer', '-yeast',
+    '-making', '-porous', '-independent', '-metallized', '-attenuated', '-liquid', '-caged', '-deficiency', '-sensing',
+    '-recognition', '-responsiveness', '-embedded', '-connectivity', '-abuse', '-chelating', '-decocted', '-forming',
+    '-nutrition', '-scavenging', '-preferring', '-mimicking', '-drugs', '-drug', '-lubricants', '-adsorption',
+    '-ligated', '-detected', '-responsive', '-reacting', '-defined', '-capturing', '-group', '-abstinent', '-paired',
+    '-devalued', '-need', '-cellulose', '-atpase', '-inactivated', '-β-glucosaminidase', '-glucosaminidase', '-dosed',
+    '-imprinted', '-precipitated', '-monoadducts', '-vacancies', '-vacancy', '-attributed', '-depolarization',
+    '-depolarized', '-liver', '-testes', '-reversible', '-active', '-reactive', '-dextran', '-fixing', '-synthesizing',
+    '-inhibitory', '-cleaving', '-positive', '-activity', '-fluorescence', '-regulating', '-NPs', '-scanning',
+    '-water', '-nmr', '-limiting', '-refractory', '-knot', '-variable', '-biomolecule', '-backbone', '-exchange',
+    '-donating', '-coating', '-hydrogenase', '-hydrogenases', '-intolerant', '-deplete', '-poor', '-loading',
+    '-enrichment', '-elevating', '-resitant', '-stabilizing', '-pathway', '-fortified', '-adjusted',
+    '-restricted', '-dependant', '-locked', '-normalized', '-aromatic', '-hydroxylation', '-intermediate',
+    '-6-phosphatase', '-phosphatase', '-linker', '-proteomic', '-mimetic', '-lipid', '-radical', '-receptors',
+    '-substrate', '-conjugates', '-promoting', '-dye', '-functionalyzed', '-catalysed', '-reductase', '-QDs',
+    '-complexes', '-placebo', '-transferases', '-alginate', '-competing', '-depleting', '-sensitized',
+    '-protein', '-regulatory', '-target', '-toxin', '-yield', '-planted', '-produced', '-derivatized', '-secreting',
+    '-modifying', '-DNA', '-bonds', '-assemblages', '-exposure', '-negative', '-sealed', '-atom', '-atoms',
+    '-abstraction', '-concentration', '-doping', '-competitive', '-acclimation', '-acclimated', '-interlinked',
+    '-suppressed', '-postlabeling', '-labeling', '-diabetic', '-omitted', '-sufficient', '-generating', '-terminus',
+    '-adducts', '-compound', '-compounds', '-γ-lyase', '-γ-synthase', '-lyase', '-synthase', '-inhibitor',
+    '-protected', '-multiwall', '-stripping', '-plasma', '-evolving'
+]
+
+#: Regular expressions defining collections of words that should be split if joined by hyphens or -to-
+SPLITS = [
+    '^(actinium|aluminium|aluminum|americium|antimony|argon|arsenic|astatine|barium|berkelium|beryllium|bismuth|bohrium|boron|bromine|cadmium|caesium|calcium|californium|carbon|cerium|cesium|chlorine|chromium|cobalt|copernicium|copper|curium|darmstadtium|dubnium|dysprosium|einsteinium|erbium|europium|fermium|flerovium|fluorine|francium|gadolinium|gallium|germanium|gold|hafnium|hassium|helium|holmium|hydrargyrum|hydrogen|indium|iodine|iridium|iron|kalium|krypton|lanthanum|lawrencium|lead|lithium|livermorium|lutetium|magnesium|manganese|meitnerium|mendelevium|mercury|molybdenum|natrium|neodymium|neon|neptunium|nickel|niobium|nitrogen|nobelium|osmium|oxygen|palladium|phosphorus|platinum|plumbum|plutonium|polonium|potassium|praseodymium|promethium|protactinium|radium|radon|rhenium|rhodium|roentgenium|rubidium|ruthenium|rutherfordium|samarium|scandium|seaborgium|selenium|silicon|silver|sodium|stannum|stibium|strontium|sulfur|tantalum|technetium|tellurium|terbium|thallium|thorium|thulium|tin|titanium|tungsten|ununoctium|ununpentium|ununseptium|ununtrium|uranium|vanadium|wolfram|xenon|ytterbium|yttrium|zinc|zirconium)$',
+    '^(Ag|Al|Ar|Au|Br|Cd|Cl|Co|Cu|Fe|Gd|Ge|Hg|Kr|Li|Mg|Na|Ne|Ni|Pb|Pd|Pt|Ru|Sb|Si|Sn|Ti|Xe|Zn|Zr|Zn)$',
+    '^(iodide|triiodide|nitrite|nitrate)$',
+    '^(graphane|graphene|carbon|silica|glucose)$',
+    '^(sugar|phospate)$',
+    '^(azide|alkyne|alkene|alkane)$',
+    '^(arginine|cysteine|glycine|aspartic acid|glutamate|dopamine|serotonin|acetone|methanol|ethanol|EtOH|MeOH|AcOEt|melatonin|leucine|alanine|histidine|isoleucine|lysine|threonine|tryptophan|nicotine|gentamicin|ATP|FITC|biotin|tamoxifen|catechin|asparagine)$',
+    '^(Ala|Arg|Asn|Asp|Cys|Glu|Gln|Gly|His|Ile|Leu|Lys|Met|Phe|Pro|Ser|Thr|Trp|Tyr|Val)(?:\(?\d+\)?)?$',
+    '^(\(?1\)?H|\(?1[45]\)?N|\(?1[234]\)?C|\(?19\)?F)$',
+    '^(F|Cl|Zn[OS]|H\(?2\)?O(\(?2\)?)?|Ni\(OH\)\(?2\)?|(NiF|SnO|TiO|NO)\(?2\)?|(Al|Y|Fe)\(?2\)?O\(?3\)?|CaCO\(?3\)?)$',
+    '^(ester|amide)$'
+]
+
+# Special case boundary adjustments (only used for cems output)
+SPECIALS = [
+    '(?:^|-)([CONS])-\w+ases?$',
+    '(?:^|-)(S)-(sulfonates?)$',
+    '^(GABA)-(benzodiazepine|A)$',
+    '^(ZnO|Au|Ag)-NPs?$',  # Nanoparticles
+    '^(UDP)-.+ase$',  # UDP-enzyme
+    '^(UDP)-(.+)$',  # UDP-other
+    '^(N|S)-(?:acetyl|nitros|hydroxyl)(?:ation|ated)$',
+    '^-(NO2|CH3|F|Cl|Br|OH)$',  # Remove leading dash
+    '^(.+)[²³]?⁺$',  # Remove trailing superscript plus \u207a
+    '^δ(\([^\(]+\).+)$',  # Remove leading δ \u03b4 but keep opening bracket if the closing bracket is within name
+    '^δ\((.+)\)?$',  # Otherwise remove leading δ \u03b4 and opening bracket
+    '^(Ala|Arg|Asn|Asp|Cys|Glu|Gln|Gly|His|Ile|Leu|Lys|Met|Phe|Pro|Ser|Thr|Trp|Tyr|Val)-?\(?\d+\)?$',
+    '^(\w{4,})(?:\)?-to-\(?|\+)(\w{4,})$',
+    '^(.+)(?:-| )(?:linker|activated|gated|mediated|containing|doped|labeled|coated|enriched|catalyzed|modified|···)(?:-| )(.+)$',
+    '^(.+)\s?···\s?(.+)$',
+    '^(.+[A-Z])\+([A-Z].+)$',  # Split on plus surrounded by uppercase alpha
+    '^([^\(\)]+\w)\+(\w[^\(\)]+)$',  # Split on plus surrounded by any letter or number provided no brackets
+    '^(.+\(\d+[A-Za-z]*\)) and (.+)$',  # Split on bracketed alphanumeric label followed by and
+    '^(.+)\.$',  # Trim off final punctuation
+
+    #'^((?:.* )acid)-(.+)$',
+    # TODO: Slash-separated names? ', ' separated? ' and ' separated? Probably have a min length limit
+]
 
 
 @python_2_unicode_compatible
@@ -121,7 +227,8 @@ class Text(collections.Sequence, BaseText):
     lexicon = ChemLexicon()
     abbreviation_detector = ChemAbbreviationDetector()
     pos_tagger = ChemCrfPosTagger()  # ChemPerceptronTagger()
-    ner_tagger = CemTagger()
+    # ner_tagger = CemTagger()
+    ner_tagger = NoneTagger()
     parsers = []
 
     def __init__(self, text, sentence_tokenizer=None, word_tokenizer=None, lexicon=None, abbreviation_detector=None, pos_tagger=None, ner_tagger=None, parsers=None, **kwargs):
@@ -305,7 +412,8 @@ class Sentence(BaseText):
     lexicon = ChemLexicon()
     abbreviation_detector = ChemAbbreviationDetector()
     pos_tagger = ChemCrfPosTagger()  # ChemPerceptronTagger()
-    ner_tagger = CemTagger()
+    # ner_tagger = CemTagger()
+    ner_tagger = NoneTagger()
     parsers = []
 
     def __init__(self, text, start=0, end=None, word_tokenizer=None, lexicon=None, abbreviation_detector=None, pos_tagger=None, ner_tagger=None, parsers=None, **kwargs):

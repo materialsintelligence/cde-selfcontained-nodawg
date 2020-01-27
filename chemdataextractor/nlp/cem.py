@@ -18,7 +18,8 @@ import six
 
 from ..text import bracket_level
 from .lexicon import ChemLexicon
-from .tag import BaseTagger, CrfTagger, DictionaryTagger
+# from .tag import BaseTagger, CrfTagger, DictionaryTagger
+from .tag import CrfTagger
 
 
 log = logging.getLogger(__name__)
@@ -508,107 +509,107 @@ class CrfCemTagger(CrfTagger):
         return features
 
 
-class CemTagger(BaseTagger):
-    """Return the combined output of a number of chemical entity taggers."""
-
-    #: The individual chemical entity taggers to use.
-    taggers = [CrfCemTagger(), CiDictCemTagger(), CsDictCemTagger()]
-    lexicon = ChemLexicon()
-
-    def _in_stoplist(self, entity):
-        """Return True if the entity is in the stoplist."""
-        start = 0
-        end = len(entity)
-        # Adjust boundaries to exclude disallowed prefixes/suffixes
-        for prefix in IGNORE_PREFIX:
-            if entity.startswith(prefix):
-                # print('%s removing %s' % (currenttext, prefix))
-                start += len(prefix)
-                break
-        for suffix in IGNORE_SUFFIX:
-            if entity.endswith(suffix):
-                # print('%s removing %s' % (currenttext, suffix))
-                end -= len(suffix)
-                break
-        # Return True if entity has been reduced to nothing by adjusting boundaries
-        if start >= end:
-            return True
-        # Return True if adjusted entity is in the literal stoplist
-        entity = entity[start:end]
-        if entity in STOPLIST:
-            return True
-        # log.debug('Entity: %s', entity)
-        for stop_re in STOP_RES:
-            if re.search(stop_re, entity):
-                log.debug('Killed: %s', entity)
-                return True
-
-    def tag(self, tokens):
-        """Run individual chemical entity mention taggers and return union of matches, with some postprocessing."""
-        # Combine output from individual taggers
-        tags = [None] * len(tokens)
-        just_tokens = [t[0] for t in tokens]
-        for tagger in self.taggers:
-            tag_gen = tagger.tag(tokens) if isinstance(tagger, CrfCemTagger) else tagger.tag(just_tokens)
-            for i, (token, newtag) in enumerate(tag_gen):
-                if newtag == 'I-CM' and not (i == 0 or tag_gen[i - 1][1] not in {'B-CM', 'I-CM'}):
-                    tags[i] = 'I-CM'  # Always overwrite I-CM
-                elif newtag == 'B-CM' and tags[i] is None:
-                    tags[i] = 'B-CM'  # Only overwrite B-CM over None
-        # Postprocess the combined output
-        for i, tag in enumerate(tags):
-            token, pos = tokens[i]
-            lex = self.lexicon[token]
-            nexttag = tags[i+1] if i < len(tags) - 1 else None
-            # Trim disallowed first tokens
-            if tag == 'B-CM' and lex.lower in STRIP_START:
-                tags[i] = None
-                if nexttag == 'I-CM':
-                    tags[i+1] = 'B-CM'
-            # Trim disallowed final tokens
-            if nexttag is None and lex.lower in STRIP_END:
-                tags[i] = None
-        # Filter certain entities
-        for i, tag in enumerate(tags):
-            token, pos = tokens[i]
-            if tag == 'B-CM':
-                entity_tokens = [self.lexicon[token].lower]
-                end_i = i + 1
-                for j, subsequent in enumerate(tags[i+1:]):
-                    if subsequent == 'I-CM':
-                        end_i += 1
-                        entity_tokens.append(self.lexicon[tokens[i+j+1][0]].lower)
-                    else:
-                        break
-
-                # Fix combined '1H NMR' on end  # TODO: Also 13C, etc.?
-                if len(entity_tokens) > 2 and entity_tokens[-1] == 'nmr' and entity_tokens[-2] == '1h':
-                    tags[end_i-2] = 'B-CM'
-                    tags[end_i-1] = None
-                    entity_tokens = entity_tokens[:-2]
-
-                entity = ' '.join(entity_tokens)
-                if any(e in STOP_TOKENS for e in entity_tokens) or self._in_stoplist(entity):
-                    tags[i:end_i] = [None] * (end_i - i)
-                else:
-                    bl = bracket_level(entity)
-                    # Try and add on brackets in neighbouring tokens if they form part of the name
-                    # TODO: Check bracket type matches before adding on
-                    if bl == 1 and len(tokens) > end_i and bracket_level(tokens[end_i][0]) == -1:
-                        #print('BLADJUST: %s - %s' % (entity, tokens[end_i][0]))
-                        tags[end_i] = 'I-CM'
-                    elif bl == -1 and i > 0 and bracket_level(tokens[i-1][0]) == 1:
-                        #print('BLADJUST: %s - %s' % (tokens[i-1][0], entity))
-                        tags[i-1] = 'B-CM'
-                        tags[i] = 'I-CM'
-                    elif not bracket_level(entity) == 0:
-                        # Filter entities that overall don't have balanced brackets
-                        tags[i:end_i] = [None] * (end_i - i)
-                    else:
-                        # Remove bracketed alphanumeric from end
-                        if len(entity_tokens) >= 4 and entity_tokens[-1] == ')' and entity_tokens[-3] == '(':
-                            if re.match('^(\d{1,2}[A-Za-z]?|I|II|III|IV|V|VI|VII|VIII|IX)$', entity_tokens[-2]):
-                                log.debug('Removing %s from end of CEM', entity_tokens[-2])
-                                tags[end_i-3:end_i] = [None, None, None]
-        tokentags = list(six.moves.zip(tokens, tags))
-        return tokentags
+# class CemTagger(BaseTagger):
+#     """Return the combined output of a number of chemical entity taggers."""
+#
+#     #: The individual chemical entity taggers to use.
+#     taggers = [CrfCemTagger(), CiDictCemTagger(), CsDictCemTagger()]
+#     lexicon = ChemLexicon()
+#
+#     def _in_stoplist(self, entity):
+#         """Return True if the entity is in the stoplist."""
+#         start = 0
+#         end = len(entity)
+#         # Adjust boundaries to exclude disallowed prefixes/suffixes
+#         for prefix in IGNORE_PREFIX:
+#             if entity.startswith(prefix):
+#                 # print('%s removing %s' % (currenttext, prefix))
+#                 start += len(prefix)
+#                 break
+#         for suffix in IGNORE_SUFFIX:
+#             if entity.endswith(suffix):
+#                 # print('%s removing %s' % (currenttext, suffix))
+#                 end -= len(suffix)
+#                 break
+#         # Return True if entity has been reduced to nothing by adjusting boundaries
+#         if start >= end:
+#             return True
+#         # Return True if adjusted entity is in the literal stoplist
+#         entity = entity[start:end]
+#         if entity in STOPLIST:
+#             return True
+#         # log.debug('Entity: %s', entity)
+#         for stop_re in STOP_RES:
+#             if re.search(stop_re, entity):
+#                 log.debug('Killed: %s', entity)
+#                 return True
+#
+#     def tag(self, tokens):
+#         """Run individual chemical entity mention taggers and return union of matches, with some postprocessing."""
+#         # Combine output from individual taggers
+#         tags = [None] * len(tokens)
+#         just_tokens = [t[0] for t in tokens]
+#         for tagger in self.taggers:
+#             tag_gen = tagger.tag(tokens) if isinstance(tagger, CrfCemTagger) else tagger.tag(just_tokens)
+#             for i, (token, newtag) in enumerate(tag_gen):
+#                 if newtag == 'I-CM' and not (i == 0 or tag_gen[i - 1][1] not in {'B-CM', 'I-CM'}):
+#                     tags[i] = 'I-CM'  # Always overwrite I-CM
+#                 elif newtag == 'B-CM' and tags[i] is None:
+#                     tags[i] = 'B-CM'  # Only overwrite B-CM over None
+#         # Postprocess the combined output
+#         for i, tag in enumerate(tags):
+#             token, pos = tokens[i]
+#             lex = self.lexicon[token]
+#             nexttag = tags[i+1] if i < len(tags) - 1 else None
+#             # Trim disallowed first tokens
+#             if tag == 'B-CM' and lex.lower in STRIP_START:
+#                 tags[i] = None
+#                 if nexttag == 'I-CM':
+#                     tags[i+1] = 'B-CM'
+#             # Trim disallowed final tokens
+#             if nexttag is None and lex.lower in STRIP_END:
+#                 tags[i] = None
+#         # Filter certain entities
+#         for i, tag in enumerate(tags):
+#             token, pos = tokens[i]
+#             if tag == 'B-CM':
+#                 entity_tokens = [self.lexicon[token].lower]
+#                 end_i = i + 1
+#                 for j, subsequent in enumerate(tags[i+1:]):
+#                     if subsequent == 'I-CM':
+#                         end_i += 1
+#                         entity_tokens.append(self.lexicon[tokens[i+j+1][0]].lower)
+#                     else:
+#                         break
+#
+#                 # Fix combined '1H NMR' on end  # TODO: Also 13C, etc.?
+#                 if len(entity_tokens) > 2 and entity_tokens[-1] == 'nmr' and entity_tokens[-2] == '1h':
+#                     tags[end_i-2] = 'B-CM'
+#                     tags[end_i-1] = None
+#                     entity_tokens = entity_tokens[:-2]
+#
+#                 entity = ' '.join(entity_tokens)
+#                 if any(e in STOP_TOKENS for e in entity_tokens) or self._in_stoplist(entity):
+#                     tags[i:end_i] = [None] * (end_i - i)
+#                 else:
+#                     bl = bracket_level(entity)
+#                     # Try and add on brackets in neighbouring tokens if they form part of the name
+#                     # TODO: Check bracket type matches before adding on
+#                     if bl == 1 and len(tokens) > end_i and bracket_level(tokens[end_i][0]) == -1:
+#                         #print('BLADJUST: %s - %s' % (entity, tokens[end_i][0]))
+#                         tags[end_i] = 'I-CM'
+#                     elif bl == -1 and i > 0 and bracket_level(tokens[i-1][0]) == 1:
+#                         #print('BLADJUST: %s - %s' % (tokens[i-1][0], entity))
+#                         tags[i-1] = 'B-CM'
+#                         tags[i] = 'I-CM'
+#                     elif not bracket_level(entity) == 0:
+#                         # Filter entities that overall don't have balanced brackets
+#                         tags[i:end_i] = [None] * (end_i - i)
+#                     else:
+#                         # Remove bracketed alphanumeric from end
+#                         if len(entity_tokens) >= 4 and entity_tokens[-1] == ')' and entity_tokens[-3] == '(':
+#                             if re.match('^(\d{1,2}[A-Za-z]?|I|II|III|IV|V|VI|VII|VIII|IX)$', entity_tokens[-2]):
+#                                 log.debug('Removing %s from end of CEM', entity_tokens[-2])
+#                                 tags[end_i-3:end_i] = [None, None, None]
+#         tokentags = list(six.moves.zip(tokens, tags))
+#         return tokentags

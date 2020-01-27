@@ -18,7 +18,7 @@ import pickle
 import random
 import re
 
-import dawg
+# import dawg
 import pycrfsuite
 import six
 
@@ -348,102 +348,102 @@ class CrfTagger(BaseTagger):
         self.load(model)
 
 
-class DictionaryTagger(BaseTagger):
-    """Dictionary Tagger. Tag tokens based on inclusion in a DAWG."""
-
-    #: The lexicon to use.
-    lexicon = Lexicon()
-    #: DAWG model file path.
-    model = None
-    #: Entity tag. Matches will be tagged like 'B-CM' and 'I-CM' according to IOB scheme. TODO: Optional no B/I?
-    entity = 'CM'
-    #: Delimiters that define where matches are allowed to start or end.
-    delimiters = re.compile(r'(^.|\b|\s|\W|.$)')
-    #: Whether dictionary matches are case sensitive.
-    case_sensitive = False
-
-    def __init__(self, words=None, model=None, entity=None, case_sensitive=None, lexicon=None):
-        """
-
-        :param list(list(string)) words: list of words, each of which is a list of tokens.
-        """
-        self._dawg = dawg.CompletionDAWG()
-        self.model = model if model is not None else self.model
-        self.entity = entity if entity is not None else self.entity
-        self.case_sensitive = case_sensitive if case_sensitive is not None else self.case_sensitive
-        self.lexicon = lexicon if lexicon is not None else self.lexicon
-        self._loaded_model = False
-        if words is not None:
-            self.build(words)
-
-    def load(self, model):
-        """Load pickled DAWG from disk."""
-        self._dawg.load(find_data(model))
-        self._loaded_model = True
-
-    def save(self, path):
-        """Save pickled DAWG to disk."""
-        self._dawg.save(path)
-
-    def build(self, words):
-        """Construct dictionary DAWG from tokenized words."""
-        words = [self._normalize(tokens) for tokens in words]
-        self._dawg = dawg.CompletionDAWG(words)
-        self._loaded_model = True
-
-    def _normalize(self, tokens):
-        """Normalization transform to apply to both dictionary words and input tokens."""
-        if self.case_sensitive:
-            return ' '.join(self.lexicon[t].normalized for t in tokens)
-        else:
-            return ' '.join(self.lexicon[t].lower for t in tokens)
-
-    def tag(self, tokens):
-        """Return a list of (token, tag) tuples for a given list of tokens."""
-        if not self._loaded_model:
-            self.load(self.model)
-        tags = [None] * len(tokens)
-        norm = self._normalize(tokens)
-        length = len(norm)
-        # A set of allowed indexes for matches to start or end at
-        delims = [0] + [i for span in [m.span() for m in self.delimiters.finditer(norm)] for i in span] + [length]
-        # Token indices
-        token_at_index = []
-        for i, t in enumerate(tokens):
-            token_at_index.extend([i] * (len(self.lexicon[t].normalized) + 1))
-        start_i = 0
-        end_i = 1
-        matches = {}
-        next_start = end_i
-        # TODO: This could be a little more efficient by skipping indexes forward to next delim points.
-        while True:
-            current = norm[start_i:end_i]
-            if self._dawg.has_keys_with_prefix(current):
-                # print('%s:%s:%s' % (start_i, end_i, current))
-                # If the current span is in the dawg, and isn't followed by an alphanumeric character
-                if current in self._dawg and start_i in delims and end_i in delims:
-                    # print(current)
-                    # Subsequent longer matches with same start_i will overwrite values in matches dict
-                    matches[start_i] = (start_i, end_i, current)
-                    # We can skip forward to after this match next time we increment start_i
-                    next_start = end_i
-                # Increment end_i provided we aren't already at the end of the input
-                if end_i < length:
-                    end_i += 1
-                    continue
-            # Increment start_i provided we aren't already at the end of the input
-            start_i = next_start
-            if start_i >= length - 1:
-                break
-            end_i = start_i + 1
-            next_start = end_i
-        # Apply matches as tags to the relevant tokens
-        for start_i, end_i, current in matches.values():
-            start_token = token_at_index[start_i]
-            end_token = token_at_index[end_i]
-            # Possible for match to start in 'I' token from prev match. Merge matches by not overwriting to 'B'.
-            if not tags[start_token] == 'I-%s' % self.entity:
-                tags[start_token] = 'B-%s' % self.entity
-            tags[start_token+1:end_token+1] = ['I-%s' % self.entity] * (end_token - start_token)
-        tokentags = list(zip(tokens, tags))
-        return tokentags
+# class DictionaryTagger(BaseTagger):
+#     """Dictionary Tagger. Tag tokens based on inclusion in a DAWG."""
+#
+#     #: The lexicon to use.
+#     lexicon = Lexicon()
+#     #: DAWG model file path.
+#     model = None
+#     #: Entity tag. Matches will be tagged like 'B-CM' and 'I-CM' according to IOB scheme. TODO: Optional no B/I?
+#     entity = 'CM'
+#     #: Delimiters that define where matches are allowed to start or end.
+#     delimiters = re.compile(r'(^.|\b|\s|\W|.$)')
+#     #: Whether dictionary matches are case sensitive.
+#     case_sensitive = False
+#
+#     def __init__(self, words=None, model=None, entity=None, case_sensitive=None, lexicon=None):
+#         """
+#
+#         :param list(list(string)) words: list of words, each of which is a list of tokens.
+#         """
+#         self._dawg = dawg.CompletionDAWG()
+#         self.model = model if model is not None else self.model
+#         self.entity = entity if entity is not None else self.entity
+#         self.case_sensitive = case_sensitive if case_sensitive is not None else self.case_sensitive
+#         self.lexicon = lexicon if lexicon is not None else self.lexicon
+#         self._loaded_model = False
+#         if words is not None:
+#             self.build(words)
+#
+#     def load(self, model):
+#         """Load pickled DAWG from disk."""
+#         self._dawg.load(find_data(model))
+#         self._loaded_model = True
+#
+#     def save(self, path):
+#         """Save pickled DAWG to disk."""
+#         self._dawg.save(path)
+#
+#     def build(self, words):
+#         """Construct dictionary DAWG from tokenized words."""
+#         words = [self._normalize(tokens) for tokens in words]
+#         self._dawg = dawg.CompletionDAWG(words)
+#         self._loaded_model = True
+#
+#     def _normalize(self, tokens):
+#         """Normalization transform to apply to both dictionary words and input tokens."""
+#         if self.case_sensitive:
+#             return ' '.join(self.lexicon[t].normalized for t in tokens)
+#         else:
+#             return ' '.join(self.lexicon[t].lower for t in tokens)
+#
+#     def tag(self, tokens):
+#         """Return a list of (token, tag) tuples for a given list of tokens."""
+#         if not self._loaded_model:
+#             self.load(self.model)
+#         tags = [None] * len(tokens)
+#         norm = self._normalize(tokens)
+#         length = len(norm)
+#         # A set of allowed indexes for matches to start or end at
+#         delims = [0] + [i for span in [m.span() for m in self.delimiters.finditer(norm)] for i in span] + [length]
+#         # Token indices
+#         token_at_index = []
+#         for i, t in enumerate(tokens):
+#             token_at_index.extend([i] * (len(self.lexicon[t].normalized) + 1))
+#         start_i = 0
+#         end_i = 1
+#         matches = {}
+#         next_start = end_i
+#         # TODO: This could be a little more efficient by skipping indexes forward to next delim points.
+#         while True:
+#             current = norm[start_i:end_i]
+#             if self._dawg.has_keys_with_prefix(current):
+#                 # print('%s:%s:%s' % (start_i, end_i, current))
+#                 # If the current span is in the dawg, and isn't followed by an alphanumeric character
+#                 if current in self._dawg and start_i in delims and end_i in delims:
+#                     # print(current)
+#                     # Subsequent longer matches with same start_i will overwrite values in matches dict
+#                     matches[start_i] = (start_i, end_i, current)
+#                     # We can skip forward to after this match next time we increment start_i
+#                     next_start = end_i
+#                 # Increment end_i provided we aren't already at the end of the input
+#                 if end_i < length:
+#                     end_i += 1
+#                     continue
+#             # Increment start_i provided we aren't already at the end of the input
+#             start_i = next_start
+#             if start_i >= length - 1:
+#                 break
+#             end_i = start_i + 1
+#             next_start = end_i
+#         # Apply matches as tags to the relevant tokens
+#         for start_i, end_i, current in matches.values():
+#             start_token = token_at_index[start_i]
+#             end_token = token_at_index[end_i]
+#             # Possible for match to start in 'I' token from prev match. Merge matches by not overwriting to 'B'.
+#             if not tags[start_token] == 'I-%s' % self.entity:
+#                 tags[start_token] = 'B-%s' % self.entity
+#             tags[start_token+1:end_token+1] = ['I-%s' % self.entity] * (end_token - start_token)
+#         tokentags = list(zip(tokens, tags))
+#         return tokentags
